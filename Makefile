@@ -1,4 +1,5 @@
 build:
+	#pdfcpu/cmd/pdfcpu
 	GOOS=js GOARCH=wasm go build -o pdfcpu.wasm
 
 static_server:

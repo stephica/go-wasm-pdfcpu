@@ -5,35 +5,60 @@ importScripts("https://cdnjs.cloudflare.com/ajax/libs/bluebird/3.5.4/bluebird.mi
 class GoWorker {
     constructor() {
         this.fs = Promise.promisifyAll(BrowserFS.BFSRequire('fs'));
-        console.log("GoWorker constructed");
-    }
+		console.log("GoWorker constructed");
+	}
 
-    async validate(buffer) {
-        await this.beforeProcess(buffer);
+    async version() {
         try {
-            this.go.argv = ['pdfcpu.wasm', 'validate', '/test.pdf'];
+            this.go.argv = ['pdfcpu.wasm', 'version'];
             var st = Date.now();
             await this.go.run(this.instance);
-            console.log('Time taken:', Date.now() - st);
+            console.log('pdfcpu version check Time taken:', Date.now() - st);
 
+            console.log('version call exit code', this.go.exitCode);
             return this.go.exitCode === 0;
         } catch (e) {
-            console.error(e);
+            console.error('version error', e);
+            return false;
+        }
+	}
 
+    async validate() {
+
+        try {
+            this.go.argv = ['pdfcpu.wasm', 'validate', '/test.pdf'];
+			var st = Date.now();
+			console.log("before valid")
+			await this.go.run(this.instance);
+			console.log("after valid")
+            console.log('Time taken:', Date.now() - st);
+
+			const ok = this.go.exitCode === 0;
+            console.log('validate succ', ok, 'exit code', this.go.exitCode)
+            return ok;
+        } catch (e) {
+            console.error('validate error', e);
             return false;
         }
     }
 
     async extractPage(buffer, page) {
-        await this.beforeProcess(buffer);
-
         this.go.argv = ['pdfcpu.wasm', 'trim', '-pages', String(page), '/test.pdf', '/first_page.pdf'];
-        var st = Date.now();
+		var st = Date.now();
+		console.log("before extract")
         await this.go.run(this.instance);
-        console.log('Time taken:', Date.now() - st);
+		console.log('trim Time taken:', Date.now() - st);
+		return
 
+        // await this.fs.fstat('/first_page.pdf', function(a0, retStat){
+		// 	console.log("a0", a0)
+		// 	console.log("fstat 1st page", retStat)
+		// });
+		console.log("before read 1st page")
         let contents = await this.fs.readFileAsync('/first_page.pdf');
-        console.log("after run main:", contents);
+		console.log("after read 1st page")
+		// console.log("after run main:", contents);
+		// console.log("read first page")
 
         this.fs.unlink('/test.pdf', err => {
             console.log("Removed test.pdf", err);
@@ -43,11 +68,9 @@ class GoWorker {
         })
 
         return contents;
-    }
-    // Write input to /test.pdf in browser fs
-    async beforeProcess(buffer) {
-        // we have to new Go() and create a new instance each time
-        // because there are states in the go obj that prevent it from running multiple times
+	}
+	
+	async initWasm() {
         this.go = new Go();
 
         if(!this.compiledModule) {
@@ -57,11 +80,24 @@ class GoWorker {
             this.instance = result.instance;
         } else {
             this.instance = await WebAssembly.instantiate(this.compiledModule, this.go.importObject);
-        }
+		}
+	}
 
-        await this.fs.writeFileAsync('/test.pdf', Buffer.from(buffer));
-        let contents = await this.fs.readFileAsync('/test.pdf');
-        console.log(contents);
+    // Write input to /test.pdf in browser fs
+    createPDFObj(buffer) {
+        // we have to new Go() and create a new instance each time
+        // because there are states in the go obj that prevent it from running multiple times
+		console.log("start write test.pdf")
+        this.fs.writeFileSync('/test.pdf', Buffer.from(buffer));
+		console.log("write test.pdf done")
+
+		// console.log("before read test")
+        // let contents = await this.fs.readFileAsync('/test.pdf');
+        // this.fs.unlink('/test.pdf', err => {
+		// 	console.log("unlink test.pdf error", err)
+		// })
+        // console.log(contents);
+		// console.log("end read test")
     }
 }
 
